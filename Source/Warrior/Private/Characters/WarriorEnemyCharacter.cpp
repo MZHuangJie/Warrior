@@ -4,6 +4,8 @@
 #include "Characters/WarriorEnemyCharacter.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Components/Combat/EnemyCombatComponent.h"
+#include "Engine/AssetManager.h"
+#include "DataAssets/StarUpData/DataAsset_EnemyStarUpDataBase.h"
 
 AWarriorEnemyCharacter::AWarriorEnemyCharacter()
 {
@@ -20,4 +22,33 @@ AWarriorEnemyCharacter::AWarriorEnemyCharacter()
 	GetCharacterMovement()->BrakingDecelerationWalking = 1000.0f;
 
 	EnemyCombatComponent = CreateDefaultSubobject<UEnemyCombatComponent>("EnemyCombatComponent");
+}
+
+void AWarriorEnemyCharacter::PossessedBy(AController* NewController)
+{
+	Super::PossessedBy(NewController);
+
+	InitEnemyStartUpData();
+
+}
+
+void AWarriorEnemyCharacter::InitEnemyStartUpData()
+{
+	if (CharacterStartUpData.IsNull())
+	{
+		return;
+	}
+
+	UAssetManager::GetStreamableManager().RequestAsyncLoad(
+		CharacterStartUpData.ToSoftObjectPath(),
+		FStreamableDelegate::CreateLambda(
+			[this]()
+			{
+				if (UDataAsset_StarUpDataBase* LoadedData = CharacterStartUpData.Get())
+				{
+					LoadedData->GiveToAbilitySystemComponent(WarriorAbilitySystemComponent);
+				}
+			}
+		)
+	);
 }

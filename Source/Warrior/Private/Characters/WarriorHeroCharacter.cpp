@@ -112,6 +112,11 @@ void AWarriorHeroCharacter::Input_Look(const FInputActionValue& InputActionValue
 	}
 }
 
+void AWarriorHeroCharacter::Input_Jump(const FInputActionValue& InputActionValue)
+{
+	//ÌøÔ¾
+}
+
 void AWarriorHeroCharacter::Input_AbilityInputPressed(FGameplayTag InInputTag)
 {
 	WarriorAbilitySystemComponent->OnAbilityInputPressed(InInputTag);
