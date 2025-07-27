@@ -31,6 +31,10 @@ protected:
 
 public:
 	AWarriorHeroCharacter();
+
+	//~ Begin IPawnCombatInterface Interface.
+	virtual UPawnCombatComponent* GetPawnCombatComponent() const override;
+	//~ End IPawnCombatInterface Interface.
 private:
 
 #pragma region Component
