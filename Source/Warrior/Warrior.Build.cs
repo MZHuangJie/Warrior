@@ -18,6 +18,7 @@ public class Warrior : ModuleRules
             "GameplayTasks",
             "GameplayAbilities",
             "AnimGraphRuntime",
+            "MotionWarping",
         });
 
         PrivateDependencyModuleNames.AddRange(new string[] { });
