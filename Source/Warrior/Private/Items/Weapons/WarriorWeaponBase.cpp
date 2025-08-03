@@ -3,6 +3,7 @@
 
 #include "Items/Weapons/WarriorWeaponBase.h"
 #include "Components/BoxComponent.h"
+#include "WarriorFunctionLibrary.h"
 
 AWarriorWeaponBase::AWarriorWeaponBase()
 {
@@ -29,7 +30,7 @@ void AWarriorWeaponBase::OnCollisionBeginOverlap(UPrimitiveComponent* Overlapped
 
 	if (APawn* HitPawn = Cast<APawn>(OtherActor))
 	{
-		if (WeaponOwingPawn != HitPawn)
+		if (UWarriorFunctionLibrary::IsTargetPawnHostile(WeaponOwingPawn, HitPawn))
 		{
 			OnWeaponHitTarget.ExecuteIfBound(OtherActor);
 		}
@@ -43,9 +44,9 @@ void AWarriorWeaponBase::OnCollisionEndOverlap(UPrimitiveComponent* OverlappedCo
 
 	if (APawn* HitPawn = Cast<APawn>(OtherActor))
 	{
-		if (WeaponOwingPawn != HitPawn)
+		if (UWarriorFunctionLibrary::IsTargetPawnHostile(WeaponOwingPawn, HitPawn))
 		{
-			OnWeaponPulledFromTarget.ExecuteIfBound(OtherActor);
+			OnWeaponHitTarget.ExecuteIfBound(OtherActor);
 		}
 	}
 }
