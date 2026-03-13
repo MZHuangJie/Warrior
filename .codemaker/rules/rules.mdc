@@ -1,0 +1,651 @@
+---
+description: UE5 Warrior 项目的 AI 编码指南和规则。包含架构模式、命名规范和游戏开发最佳实践。
+alwaysApply: true
+---
+<rule>
+# Warrior 项目 - AI 编码规则
+
+## 1. 高级概述
+
+### 1.1 架构
+这是一个 **Unreal Engine 5 C++ 动作 RPG** 项目，使用以下技术：
+- **Gameplay Ability System (GAS)** - 用于技能、属性和效果
+- **Enhanced Input System** - 用于玩家输入处理
+- **Motion Warping** - 用于动画驱动的移动
+- **AI Behavior Trees** - 自定义任务和服务的行为树
+- **AI Perception System** - 敌人感知系统
+
+### 1.2 模块依赖
+```cpp
+PublicDependencyModuleNames: 
+  Core, CoreUObject, Engine, InputCore, EnhancedInput,
+  GameplayTags, GameplayTasks, GameplayAbilities,
+  AnimGraphRuntime, MotionWarping
+```
+
+### 1.3 入口点和生命周期
+- **角色初始化**: `PossessedBy()` → 初始化 ASC → 加载 StartUpData
+- **英雄输入设置**: `SetupPlayerInputComponent()` → 绑定 InputActions
+- **敌人 AI 设置**: `AWarriorAIController::BeginPlay()` → 配置感知 → 运行行为树
+- **技能授予流程**: `UDataAsset_StarUpDataBase::GiveToAbilitySystemComponent()`
+
+### 1.4 核心类层次结构
+```
+AWarriorBaseCharacter (Base)
+├── AWarriorHeroCharacter (Player)
+└── AWarriorEnemyCharacter (AI)
+
+UWarriorGameplayAbility (Base)
+├── UWarriorHeroGameplayAbility (Player abilities)
+└── UWarriorEnemyGameplayAbility (Enemy abilities)
+
+UPawnCombatComponent (Base)
+├── UHeroCombatComponent (Player combat)
+└── UEnemyCombatComponent (Enemy combat)
+```
+
+---
+
+## 2. 代码风格与一致性规范
+
+### 2.1 命名规范
+
+| 类型 | 规范 | 示例 |
+|------|------|------|
+| **类** | UObject 使用 `U` 前缀，Actor 使用 `A` 前缀，结构体使用 `F` 前缀，枚举使用 `E` 前缀 | `UWarriorAbilitySystemComponent`, `AWarriorHeroCharacter`, `FWarriorHeroAbilitySet`, `EWarriorConfirmType` |
+| **接口** | `I` 前缀 | `IPawnCombatInterface`, `IPawnUIInterface` |
+| **组件** | 描述性名称 + `Component` 后缀 | `UHeroCombatComponent`, `UEnemyUIComponent` |
+| **GameplayTags** | 点分隔的层级结构 | `Player.Ability.Attack.Light.Axe`, `Shared.Event.MeleeHit` |
+| **变量** | PascalCase，布尔值使用 `b` 前缀 | `CurrentEquippedWeaponTag`, `bHasAcceleration` |
+| **私有成员** | 与变量相同，不使用下划线前缀 | `CachedWarriorHeroCharacter` |
+| **函数** | PascalCase，动词开头 | `GetPawnCombatComponent()`, `OnHitTargetActor()` |
+| **蓝图可调用函数** | 蓝图暴露的变体使用 `BP_` 前缀 | `BP_DoesActorHaveTag()`, `BP_ApplyEffectSpecHandleToTarget()` |
+| **原生函数** | 仅 C++ 内部版本使用 `Native` 前缀 | `NativeGetWarriorASCFromActor()`, `NativeDoesActorHaveTag()` |
+| **事件回调** | `On` 前缀 | `OnAbilityInputPressed()`, `OnWeaponHitTarget` |
+| **数据资产** | `DataAsset_` 前缀 | `DataAsset_InputConfig`, `DataAsset_StarUpDataBase` |
+| **执行计算器** | `GEExecCalc_` 前缀 | `GEExecCalc_DamageTaken` |
+| **行为树任务** | `BTTask_` 前缀 | `BTTask_RotateToFaceTarget` |
+| **行为树服务** | `BTService_` 前缀 | `BTService_OrientToTargetActor` |
+
+### 2.2 文件组织
+```
+Source/Warrior/
+├── Private/           # .cpp implementation files
+│   └── [ModuleName]/  # Mirror Public structure
+├── Public/            # .h header files
+│   ├── AbilitySystem/ # GAS-related classes
+│   ├── Characters/    # Character classes
+│   ├── Components/    # Actor components
+│   ├── Controller/    # Player & AI controllers
+│   ├── DataAssets/    # UDataAsset subclasses
+│   ├── Items/         # Weapons, pickups
+│   ├── WarriorTypes/  # Enums & Structs
+│   └── Widgets/       # UMG widgets
+```
+
+### 2.3 头文件标准
+```cpp
+// Fill out your copyright notice in the Description page of Project Settings.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "[ParentClassHeader].h"
+#include "[ClassName].generated.h"
+```
+
+### 2.4 UPROPERTY/UFUNCTION 模式
+
+**组件声明:**
+```cpp
+UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CategoryName")
+UComponentType* ComponentName;
+```
+
+**可编辑属性:**
+```cpp
+UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CategoryName")
+TSubclassOf<UClass> PropertyName;
+```
+
+**蓝图可调用函数:**
+```cpp
+UFUNCTION(BlueprintCallable, Category = "Warrior|SubCategory")
+void FunctionName();
+```
+
+**蓝图纯函数:**
+```cpp
+UFUNCTION(BlueprintPure, Category = "Warrior|SubCategory")
+ReturnType GetSomething() const;
+```
+
+**蓝图可实现事件:**
+```cpp
+UFUNCTION(BlueprintImplementableEvent, meta = (DisplayName = "Readable Name"))
+void BP_OnEventName(UComponentType* Param);
+```
+
+**枚举输出引脚:**
+```cpp
+UFUNCTION(BlueprintCallable, Category = "Warrior|FunctionLibrary", 
+          meta = (DisplayName = "Display Name", ExpandEnumAsExecs = "OutEnumType"))
+void FunctionWithEnumOutput(AActor* InActor, EWarriorConfirmType& OutEnumType);
+```
+
+### 2.5 内联 Getter 模式
+```cpp
+FORCEINLINE UComponentType* GetComponent() const { return ComponentPointer; }
+```
+
+---
+
+## 3. 快速参考与上下文映射
+
+### 3.1 核心工具函数 (UWarriorFunctionLibrary)
+
+```cpp
+// 从任意 Actor 获取 ASC
+static UWarriorAbilitySystemComponent* NativeGetWarriorASCFromActor(AActor* InActor);
+
+// 安全地添加/移除 GameplayTag
+static void AddGameplayTagToActorIfNone(AActor* InActor, FGameplayTag TagToAdd);
+static void RemoveGameplayTagFromActorIfFound(AActor* InActor, FGameplayTag TagToRemove);
+
+// 检查 Actor 是否拥有指定 Tag
+static bool NativeDoesActorHaveTag(AActor* InActor, FGameplayTag TagToCheck);
+
+// 通过接口获取战斗组件
+static UPawnCombatComponent* NativeGetPawnCombatComponentFromActor(AActor* InActor);
+
+// 检查目标是否敌对（使用 IGenericTeamAgentInterface）
+static bool IsTargetPawnHostile(APawn* QueryPawn, APawn* TargetPawn);
+
+// 获取指定等级的可缩放浮点值
+static float GetScalableFloatValueAtLevel(const FScalableFloat& InScalableFloat, float InLevel = 1.0f);
+```
+
+### 3.2 调试助手 (Debug 命名空间)
+
+```cpp
+// 打印调试消息到屏幕
+static void Debug::Print(const FString& Msg, const FColor& Color = FColor::MakeRandomColor(), int32 InKey = -1);
+
+// 打印带标签的浮点值
+static void Debug::Print(const FString& FloatTitle, float FloatValueToPrint, int32 InKey = -1, const FColor& Color = FColor::MakeRandomColor());
+```
+
+### 3.3 关键 Gameplay Tags (WarriorGameplayTags 命名空间)
+
+**输入 Tags:**
+```cpp
+WarriorGameplayTags::InputTag_Move
+WarriorGameplayTags::InputTag_Look
+WarriorGameplayTags::InputTag_EquipAxe
+WarriorGameplayTags::InputTag_UnequipAxe
+WarriorGameplayTags::InputTag_LightAttack_Axe
+WarriorGameplayTags::InputTag_HeavyAttack_Axe
+WarriorGameplayTags::InputTag_Roll
+```
+
+**玩家 Tags:**
+```cpp
+WarriorGameplayTags::Player_Ability_Equip_Axe
+WarriorGameplayTags::Player_Ability_Attack_Light_Axe
+WarriorGameplayTags::Player_Ability_Attack_Heavy_Axe
+WarriorGameplayTags::Player_Ability_Roll
+WarriorGameplayTags::Player_Weapon_Axe
+WarriorGameplayTags::Player_Event_HitPause
+WarriorGameplayTags::Player_Status_Rolling
+WarriorGameplayTags::Player_SetByCaller_AttackType_Light
+WarriorGameplayTags::Player_SetByCaller_AttackType_Heavy
+```
+
+**敌人 Tags:**
+```cpp
+WarriorGameplayTags::Enemy_Weapon
+WarriorGameplayTags::Enemy_Ability_Melee
+WarriorGameplayTags::Enemy_Status_Strafing
+WarriorGameplayTags::Enemy_Status_UnderAttack
+```
+
+**共享 Tags:**
+```cpp
+WarriorGameplayTags::Shared_Ability_HitReact
+WarriorGameplayTags::Shared_Ability_Death
+WarriorGameplayTags::Shared_Event_MeleeHit
+WarriorGameplayTags::Shared_Event_HitReact
+WarriorGameplayTags::Shared_SetByCaller_BaseDamage
+WarriorGameplayTags::Shared_Status_Dead
+```
+
+### 3.4 阵营 ID
+
+```cpp
+FGenericTeamId(0)  // 英雄/玩家阵营
+FGenericTeamId(1)  // 敌人阵营
+```
+
+### 3.5 常用实体访问
+
+**获取玩家角色:**
+```cpp
+AWarriorHeroCharacter* Hero = Cast<AWarriorHeroCharacter>(GetAvatarActorFromActorInfo());
+// 或从技能中:
+AWarriorHeroCharacter* Hero = GetHeroCharacterFromActorInfo();
+```
+
+**获取玩家控制器:**
+```cpp
+AWarriorHeroController* Controller = GetHeroControllerFromActorInfo();
+```
+
+**获取战斗组件:**
+```cpp
+UHeroCombatComponent* Combat = GetHeroCombatComponentFromActorInfo();
+// 或通过接口:
+UPawnCombatComponent* Combat = UWarriorFunctionLibrary::NativeGetPawnCombatComponentFromActor(Actor);
+```
+
+**获取 ASC:**
+```cpp
+UWarriorAbilitySystemComponent* ASC = GetWarriorAbilitySystemComponentFromActorInfo();
+// 或:
+UWarriorAbilitySystemComponent* ASC = UWarriorFunctionLibrary::NativeGetWarriorASCFromActor(Actor);
+```
+
+**获取当前装备的武器:**
+```cpp
+AWarriorWeaponBase* Weapon = CombatComponent->GetCharacterCurrentEquippedWeapon();
+AWarriorHeroWeapon* HeroWeapon = HeroCombatComponent->GetHeroCurrentWeapon();
+```
+
+---
+
+## 4. 游戏特定模式
+
+### 4.1 技能激活模式
+
+```cpp
+// 在 AbilitySystemComponent 中
+void UWarriorAbilitySystemComponent::OnAbilityInputPressed(const FGameplayTag& InInputTag)
+{
+    if (!InInputTag.IsValid()) return;
+    
+    for (const FGameplayAbilitySpec& AbilitySpec : GetActivatableAbilities())
+    {
+        if (!AbilitySpec.GetDynamicSpecSourceTags().HasTagExact(InInputTag)) continue;
+        TryActivateAbility(AbilitySpec.Handle);
+    }
+}
+```
+
+### 4.2 伤害效果创建模式
+
+**英雄伤害:**
+```cpp
+FGameplayEffectSpecHandle MakeHeroDamageEffectSpecHandle(
+    TSubclassOf<UGameplayEffect> EffectClass, 
+    float InWeaponBaseDamage, 
+    FGameplayTag InCurrentAttackTypeTag, 
+    int32 InUsedComboCount)
+{
+    check(EffectClass);
+    
+    FGameplayEffectContextHandle ContextHandle = GetWarriorAbilitySystemComponentFromActorInfo()->MakeEffectContext();
+    ContextHandle.SetAbility(this);
+    ContextHandle.AddSourceObject(GetAvatarActorFromActorInfo());
+    ContextHandle.AddInstigator(GetAvatarActorFromActorInfo(), GetAvatarActorFromActorInfo());
+    
+    FGameplayEffectSpecHandle EffectSpecHandle = GetWarriorAbilitySystemComponentFromActorInfo()->MakeOutgoingSpec(
+        EffectClass,
+        GetAbilityLevel(),
+        ContextHandle
+    );
+    
+    EffectSpecHandle.Data->SetSetByCallerMagnitude(
+        WarriorGameplayTags::Shared_SetByCaller_BaseDamage,
+        InWeaponBaseDamage
+    );
+    
+    if (InCurrentAttackTypeTag.IsValid())
+    {
+        EffectSpecHandle.Data->SetSetByCallerMagnitude(InCurrentAttackTypeTag, InUsedComboCount);
+    }
+    
+    return EffectSpecHandle;
+}
+```
+
+### 4.3 战斗命中事件模式
+
+```cpp
+void UHeroCombatComponent::OnHitTargetActor(AActor* HitActor)
+{
+    // 防止重复命中
+    if (OverlappedActors.Contains(HitActor)) return;
+    OverlappedActors.AddUnique(HitActor);
+    
+    // 构建事件数据
+    FGameplayEventData Data;
+    Data.Instigator = GetOwningPawn();
+    Data.Target = HitActor;
+    
+    // 发送游戏事件
+    UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(
+        GetOwningPawn(),
+        WarriorGameplayTags::Shared_Event_MeleeHit,
+        Data
+    );
+}
+```
+
+### 4.4 异步数据加载模式（用于敌人）
+
+```cpp
+void AWarriorEnemyCharacter::InitEnemyStartUpData()
+{
+    if (CharacterStartUpData.IsNull()) return;
+
+    UAssetManager::GetStreamableManager().RequestAsyncLoad(
+        CharacterStartUpData.ToSoftObjectPath(),
+        FStreamableDelegate::CreateLambda([this]()
+        {
+            if (UDataAsset_StarUpDataBase* LoadedData = CharacterStartUpData.Get())
+            {
+                LoadedData->GiveToAbilitySystemComponent(WarriorAbilitySystemComponent);
+            }
+        })
+    );
+}
+```
+
+### 4.5 生命周期: PossessedBy 模式
+
+**英雄:**
+```cpp
+void AWarriorHeroCharacter::PossessedBy(AController* NewController)
+{
+    Super::PossessedBy(NewController);  // 务必首先调用 Super
+    
+    if (!CharacterStartUpData.IsNull())
+    {
+        if (UDataAsset_StarUpDataBase* LoadedData = CharacterStartUpData.LoadSynchronous())
+        {
+            LoadedData->GiveToAbilitySystemComponent(WarriorAbilitySystemComponent);
+        }
+    }
+}
+```
+
+**敌人:**
+```cpp
+void AWarriorEnemyCharacter::PossessedBy(AController* NewController)
+{
+    Super::PossessedBy(NewController);
+    InitEnemyStartUpData();  // 异步加载
+}
+```
+
+### 4.6 武器碰撞切换模式
+
+```cpp
+void UPawnCombatComponent::ToggleWeaponCollision(bool bShouldEnable, EToggleDamageType ToggleDamageType)
+{
+    if (ToggleDamageType == EToggleDamageType::CurrentEquippedWeapon)
+    {
+        AWarriorWeaponBase* WeaponToToggle = GetCharacterCurrentEquippedWeapon();
+        check(WeaponToToggle);
+        
+        if (bShouldEnable)
+        {
+            WeaponToToggle->GetWeaponCollisionBox()->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+        }
+        else
+        {
+            WeaponToToggle->GetWeaponCollisionBox()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+            OverlappedActors.Empty();  // 重要: 清空命中列表
+        }
+    }
+}
+```
+
+### 4.7 属性变更处理模式
+
+```cpp
+void UWarriorAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data)
+{
+    // 缓存接口以提升性能
+    if (!CachedPawnUIInterface.IsValid())
+    {
+        CachedPawnUIInterface = TWeakInterfacePtr<IPawnUIInterface>(Data.Target.GetAvatarActor());
+    }
+    
+    UPawnUIComponent* PawnUIComponent = CachedPawnUIInterface->GetPawnUIComponent();
+    checkf(PawnUIComponent, TEXT("..."));  // 务必验证
+    
+    if (Data.EvaluatedData.Attribute == GetCurrentHealthAttribute())
+    {
+        const float NewCurrentHealth = FMath::Clamp(GetCurrentHealth(), 0.f, GetMaxHealth());
+        SetCurrentHealth(NewCurrentHealth);
+        PawnUIComponent->OnCurrentHealthChanged.Broadcast(GetCurrentHealth()/GetMaxHealth());  // 广播归一化值
+    }
+    
+    // 死亡检查
+    if (GetCurrentHealth() == 0.f)
+    {
+        UWarriorFunctionLibrary::AddGameplayTagToActorIfNone(
+            Data.Target.GetAvatarActor(), 
+            WarriorGameplayTags::Shared_Status_Dead
+        );
+    }
+}
+```
+
+### 4.8 AI 感知模式
+
+```cpp
+void AWarriorAIController::OnEnemyPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus)
+{
+    if (UBlackboardComponent* BlackboardComponent = GetBlackboardComponent())
+    {
+        if (!BlackboardComponent->GetValueAsObject(FName("TargetActor")))  // 仅在为空时设置
+        {
+            if (Stimulus.WasSuccessfullySensed() && Actor)
+            {
+                BlackboardComponent->SetValueAsObject(FName("TargetActor"), Actor);
+            }
+        }
+    }
+}
+```
+
+---
+
+## 5. 错误处理与验证
+
+### 5.1 断言模式
+
+**使用 `check()` 处理内部不变量:**
+```cpp
+check(InASCToGive);
+check(AbilityTagToActive.IsValid());
+check(TargetASC && InSpecHandle.IsValid());
+```
+
+**使用 `checkf()` 并附带描述性消息处理配置错误:**
+```cpp
+checkf(InputConfigDataAsset, TEXT("Forgot to assign a valid data asset as input config"));
+checkf(WeaponOwingPawn, TEXT("Forgot to assign an instigator as the owning pawn for the weapon: %s"), *GetName());
+checkf(!CharacterCarriedWeaponMap.Contains(Tag), TEXT("A named %s has already been added as carried weapon"), *Tag.ToString());
+```
+
+**使用 `ensureMsgf()` 处理可恢复的错误:**
+```cpp
+ensureMsgf(!CharacterStartUpData.IsNull(), TEXT("Forgot to assign star up data to %s"), *GetName());
+```
+
+### 5.2 有效性检查
+
+```cpp
+// Tag 有效性
+if (!InInputTag.IsValid()) return;
+
+// 软对象引用
+if (CharacterStartUpData.IsNull()) return;
+
+// 弱指针
+if (!CachedWarriorHeroCharacter.IsValid()) { /* 重新缓存 */ }
+
+// 数组为空
+if (InDefaultWeaponAbilities.IsEmpty()) return;
+```
+
+---
+
+## 6. 开发者工作流程
+
+### 6.1 构建命令
+
+**生成 Visual Studio 项目:**
+```bash
+# 右键 Warrior.uproject -> "Generate Visual Studio Project Files"
+```
+
+**命令行构建:**
+```bash
+# 从 UE 安装目录
+UnrealBuildTool.exe Warrior Win64 Development -Project="E:\UEProject\Warrior\Warrior.uproject"
+```
+
+### 6.2 新 Gameplay Ability 模板
+
+```cpp
+// WarriorNewAbility.h
+#pragma once
+
+#include "CoreMinimal.h"
+#include "AbilitySystem/Abilities/WarriorHeroGameplayAbility.h"  // or WarriorEnemyGameplayAbility.h
+#include "WarriorNewAbility.generated.h"
+
+UCLASS()
+class WARRIOR_API UWarriorNewAbility : public UWarriorHeroGameplayAbility
+{
+    GENERATED_BODY()
+    
+public:
+    virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
+    virtual void EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled) override;
+    
+protected:
+    UPROPERTY(EditDefaultsOnly, Category = "Ability")
+    TSubclassOf<UGameplayEffect> DamageEffectClass;
+};
+```
+
+### 6.3 新组件模板
+
+```cpp
+// NewWarriorComponent.h
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Components/PawnExtensionComponentBase.h"
+#include "NewWarriorComponent.generated.h"
+
+UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
+class WARRIOR_API UNewWarriorComponent : public UPawnExtensionComponentBase
+{
+    GENERATED_BODY()
+    
+public:
+    UFUNCTION(BlueprintCallable, Category = "Warrior|NewComponent")
+    void DoSomething();
+    
+protected:
+    UPROPERTY(EditDefaultsOnly, Category = "Config")
+    float ConfigValue;
+};
+```
+
+### 6.4 新 Widget 模板
+
+```cpp
+// NewWarriorWidget.h
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Widgets/WarriorWidgetBase.h"
+#include "NewWarriorWidget.generated.h"
+
+UCLASS()
+class WARRIOR_API UNewWarriorWidget : public UWarriorWidgetBase
+{
+    GENERATED_BODY()
+    
+protected:
+    virtual void NativeOnInitialized() override;
+    
+    UFUNCTION(BlueprintImplementableEvent, meta = (DisplayName = "On Custom Event"))
+    void BP_OnCustomEvent();
+};
+```
+
+### 6.5 新 Gameplay Tag 定义
+
+**在 WarriorGamePlayTags.h 中（命名空间声明）:**
+```cpp
+WARRIOR_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(NewCategory_NewTag);
+```
+
+**在 WarriorGamePlayTags.cpp 中（定义）:**
+```cpp
+UE_DEFINE_GAMEPLAY_TAG(NewCategory_NewTag, "NewCategory.NewTag");
+```
+
+---
+
+## 7. 性能指南
+
+### 7.1 Tick 优化
+- **默认禁用 Tick**: `PrimaryActorTick.bCanEverTick = false;`
+- 使用 `bStartWithTickEnabled = false;` 实现条件性 Tick
+
+### 7.2 缓存
+- 缓存接口指针: `TWeakInterfacePtr<IPawnUIInterface> CachedPawnUIInterface;`
+- 缓存角色引用: `TWeakObjectPtr<AWarriorHeroCharacter> CachedWarriorHeroCharacter;`
+- 使用前务必检查 `.IsValid()`
+
+### 7.3 异步加载
+- 对敌人数据使用 `UAssetManager::GetStreamableManager().RequestAsyncLoad()`
+- 仅对玩家（关键路径）使用 `LoadSynchronous()`
+
+### 7.4 碰撞
+- 武器碰撞默认设为 `ECollisionEnabled::NoCollision`
+- 仅在攻击窗口期间通过 AnimNotifyState 启用
+- 禁用碰撞时清空 `OverlappedActors`
+
+---
+
+## 8. 常见陷阱与注意事项
+
+1. **忘记在生命周期函数中调用 `Super::`**
+2. **禁用武器碰撞时未清空 `OverlappedActors`**
+3. **对非玩家实体使用 `LoadSynchronous()`（会导致卡顿）**
+4. **忘记为生成的武器分配 `Instigator`**
+5. **使用前未验证 `FGameplayTag::IsValid()`**
+6. **未先检查 `HasMatchingGameplayTag()` 就添加重复的 Tag**
+7. **卸下武器时忘记移除技能**
+8. **未正确处理死亡状态（`Shared_Status_Dead`）**
+
+---
+
+## 9. 蓝图集成说明
+
+- **分类标准**: 蓝图暴露的函数使用 `"Warrior|SubCategory"`
+- **Meta 标签**: 使用 `(DisplayName = "...")` 设置可读名称
+- **枚举输出**: 使用 `meta = (ExpandEnumAsExecs = "OutEnumParam")` 创建分支引脚
+- **可实现事件**: 使用 `BP_` 前缀和 `BlueprintImplementableEvent`
+- **线程安全**: 动画函数使用 `meta = (BlueprintThreadSafe)` 或 `(NotBlueprintThreadSafe)`
+
+</rule>
